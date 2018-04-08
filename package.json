@@ -1,0 +1,16 @@
+{
+  "name": "differential_evolution_optimization",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "@tensorflow/tfjs": "^0.6.1",
+    "lodash": "^4.17.5"
+  },
+  "scripts": {
+    "dev": "webpack",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
