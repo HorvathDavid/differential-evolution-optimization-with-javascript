@@ -1,7 +1,7 @@
 const path = require('path');
 
 module.exports = {
-    watch: true,
+  watch: true,
   entry: './index.js',
   mode: 'development',
   devtool: 'cheap-module-eval-source-map',
