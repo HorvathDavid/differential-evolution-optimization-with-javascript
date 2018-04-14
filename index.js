@@ -1,16 +1,20 @@
 import _ from 'lodash'
 import * as tf from '@tensorflow/tfjs';
+import Chart from 'chart.js';
 
 window.tf = tf
 
-const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
 
-const numIterations = 10000
+const numIterations = 15000
 const learning_rate = 0.001
-const rnn_hidden = 100
+const rnn_hidden = 128
 const preparedDataforTestSet = inputText.split(' ')
 const endOfSeq = preparedDataforTestSet.length - 4
 const optimizer = tf.train.rmsprop(learning_rate)
+const dataLabels = []
+const dataForGraph = []
 
 
 // preparing data
@@ -68,9 +72,8 @@ const decode = (probDistVector) => {
 
     // @todo: ide kell majd beleirni
     const some = probDistVector.dataSync()
-    const a = some.indexOf(_.max(some))
-    console.log(a)
-    return a
+    // console.log(some)
+    return some.indexOf(_.max(some))
 }
 
 
@@ -132,8 +135,17 @@ const train = async (numIterations) => {
             const pred = predict(tf.tensor(samples, [1, 3, 1]));
             return loss(labelProbVector, pred);
         }, true);
-        
-        console.log(`The loss is:  ${lossValue.dataSync()}   --------`)
+
+        if (iter % 100 === 0) {
+            const lvdsy = lossValue.dataSync()
+            console.log(`
+            --------
+            Step number: ${iter}
+            The loss is:  ${lvdsy}
+            --------`)
+            dataLabels.push(iter)
+            dataForGraph.push(lvdsy)
+        }
         // console.log(lossValue)
         // Use tf.nextFrame to not block the browser.
         await tf.nextFrame();
@@ -146,11 +158,13 @@ const learnToGuessWord = async () => {
 
     console.log('TRAIN IS OVER')
 
+    drawChart(dataLabels, dataForGraph)
+
     const symbolCollector = getSamples().map(s => {
         return toSymbol(s)
     })
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
         const predProbVector = predict(tf.tensor(symbolCollector.slice(-3), [1, 3, 1]))
         symbolCollector.push(decode(predProbVector));
     }
@@ -163,13 +177,44 @@ const learnToGuessWord = async () => {
 }
 
 learnToGuessWord();
-// // TEST COMES HERE
-// const tensorTest = getSamples().map(s => {
-//     return encode(s)
-// }).slice(0, 3)
 
-// // console.log(tensorTest)
-// const shit = tf.tensor([32, 46, 52], [1, 3, 1])
-// shit.print()
 
-// predict(shit).print()
+const drawChart = (labelsGot, dataF) => {
+    var ctx = document.getElementById("myChart");
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labelsGot,
+            datasets: [{
+                label: 'LOSS',
+                data: dataF,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)',
+                    'rgba(255, 206, 86, 0.2)',
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(153, 102, 255, 0.2)',
+                    'rgba(255, 159, 64, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255,99,132,1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: true
+                    }
+                }]
+            }
+        }
+    });
+}
