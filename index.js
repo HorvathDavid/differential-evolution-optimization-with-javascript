@@ -5,9 +5,9 @@ window.tf = tf
 
 const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
 
-const numIterations = 10
+const numIterations = 1000
 const learning_rate = 0.001
-const rnn_hidden = 8
+const rnn_hidden = 100
 const preparedDataforTestSet = inputText.split(' ')
 const endOfSeq = preparedDataforTestSet.length - 4
 const optimizer = tf.train.rmsprop(learning_rate)
@@ -42,7 +42,7 @@ const createWordMap = (textData) => {
 const wordMap = createWordMap(inputText)
 const wordWrapLength = Object.keys(wordMap).length
 
-console.log(wordMap)
+// console.log(wordMap)
 
 
 // return a word
@@ -78,7 +78,7 @@ const decode = (probDistVector) => {
 const wordVector = tf.input({ shape: [3, 1] });
 const cells = [
     tf.layers.lstmCell({ units: rnn_hidden }),
-    tf.layers.lstmCell({ units: rnn_hidden }),
+    // tf.layers.lstmCell({ units: rnn_hidden }),
 ];
 const rnn = tf.layers.rnn({ cell: cells, returnSequences: false });
 
@@ -127,22 +127,21 @@ const train = async (numIterations) => {
         // This optimizer does the 'backward' step of our training process
         // updating variables defined previously in order to minimize the
         // loss.
-
-        optimizer.minimize(() => {
+        const lossValue = optimizer.minimize(() => {
             // Feed the examples into the model
-            // console.log(samples)
             const pred = predict(tf.tensor(samples, [1, 3, 1]));
-            const error = loss(labelProbVector, pred);
-            return error
-        });
-
+            return loss(labelProbVector, pred);
+        }, true);
+        
+        console.log(`The loss is:  ${lossValue.dataSync()}   --------`)
+        // console.log(lossValue)
         // Use tf.nextFrame to not block the browser.
         await tf.nextFrame();
     }
 }
 
 const learnToGuessWord = async () => {
-
+    console.log('TRAIN START')
     await train(numIterations);
 
     console.log('TRAIN IS OVER')
