@@ -4,17 +4,18 @@ import Chart from 'chart.js';
 
 window.tf = tf
 
-// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
-const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
+const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
 
-const numIterations = 15000
+const numIterations = 50000
 const learning_rate = 0.001
 const rnn_hidden = 128
 const preparedDataforTestSet = inputText.split(' ')
-const endOfSeq = preparedDataforTestSet.length - 4
+const examinedNumberOfWord = 5
+const endOfSeq = preparedDataforTestSet.length - (examinedNumberOfWord + 1)
 const optimizer = tf.train.rmsprop(learning_rate)
-const dataLabels = []
-const dataForGraph = []
+let chart
+let stop_training = false
 
 
 // preparing data
@@ -64,7 +65,10 @@ const toSymbol = (word) => {
 // return onehot vector, for compare with probability distribution vector
 const encode = (symbol) => {
     // console.log(symbol)
-    return tf.oneHot(tf.tensor1d(symbol), wordWrapLength)
+    return tf.tidy(() => {
+        const symbolTensor1d = tf.tensor1d(symbol)
+        return tf.oneHot(symbolTensor1d, wordWrapLength)
+    })
 }
 
 // return a symbol
@@ -78,10 +82,10 @@ const decode = (probDistVector) => {
 
 
 // building the model
-const wordVector = tf.input({ shape: [3, 1] });
+const wordVector = tf.input({ shape: [examinedNumberOfWord, 1] });
 const cells = [
     tf.layers.lstmCell({ units: rnn_hidden }),
-    // tf.layers.lstmCell({ units: rnn_hidden }),
+    tf.layers.lstmCell({ units: rnn_hidden }),
 ];
 const rnn = tf.layers.rnn({ cell: cells, returnSequences: false });
 
@@ -94,9 +98,7 @@ const model = tf.model({ inputs: wordVector, outputs: output })
 // sample is: shape: [batch, sequence, feature], here is [1, number of wordsq, 1]
 const predict = (samples) => {
     // console.log(samples)
-    return tf.tidy(() => {
-        return model.predict(samples)
-    })
+    return model.predict(samples)
 }
 
 const loss = (labels, predictions) => {
@@ -108,18 +110,32 @@ const loss = (labels, predictions) => {
 // then random select from encodings not from string of arrays
 const getSamples = () => {
     const startOfSeq = _.random(0, endOfSeq, false)
-    const retVal = preparedDataforTestSet.slice(startOfSeq, startOfSeq + 4)
+    const retVal = preparedDataforTestSet.slice(startOfSeq, startOfSeq + (examinedNumberOfWord + 1))
     return retVal
 }
 
 const train = async (numIterations) => {
+
+    let lossCounter = null
+
     for (let iter = 0; iter < numIterations; iter++) {
+
+        let labelProbVector
+        let lossValue
+        let pred
+        let losse
+        let samplesTensor
 
         const samples = getSamples().map(s => {
             return toSymbol(s)
         })
 
-        const labelProbVector = encode(samples.splice(-1))
+        labelProbVector = encode(samples.splice(-1))
+
+        if (stop_training) {
+            stop_training = false
+            break
+        }
 
         // optimizer.minimize is where the training happens. 
 
@@ -130,42 +146,62 @@ const train = async (numIterations) => {
         // This optimizer does the 'backward' step of our training process
         // updating variables defined previously in order to minimize the
         // loss.
-        const lossValue = optimizer.minimize(() => {
+        lossValue = optimizer.minimize(() => {
             // Feed the examples into the model
-            const pred = predict(tf.tensor(samples, [1, 3, 1]));
-            return loss(labelProbVector, pred);
+            samplesTensor = tf.tensor(samples, [1, examinedNumberOfWord, 1])
+            pred = predict(samplesTensor);
+            losse = loss(labelProbVector, pred);
+            return losse
         }, true);
 
+        if (lossCounter === null) {
+            lossCounter = lossValue.dataSync()[0]
+        }
+        lossCounter += lossValue.dataSync()[0]
+        
+        
         if (iter % 100 === 0) {
-            const lvdsy = lossValue.dataSync()
+            const lvdsy = lossCounter / 100
+            lossCounter = 0
             console.log(`
             --------
             Step number: ${iter}
-            The loss is:  ${lvdsy}
+            The average loss is (last 100 steps):  ${lvdsy}
+            Number of tensors in memory: ${tf.memory().numTensors}
             --------`)
-            dataLabels.push(iter)
-            dataForGraph.push(lvdsy)
+            // dataLabels.push(iter)
+            // dataForGraph.push(lvdsy)
+            chart.data.datasets[0].data.push(lvdsy)
+            chart.data.labels.push(iter)
+            chart.update()
         }
         // console.log(lossValue)
         // Use tf.nextFrame to not block the browser.
         await tf.nextFrame();
+        pred.dispose()
+        labelProbVector.dispose()
+        lossValue.dispose()
+        losse.dispose()
+        samplesTensor.dispose()
     }
 }
 
 const learnToGuessWord = async () => {
     console.log('TRAIN START')
+
+    chart = drawChart([], [])
+
     await train(numIterations);
 
     console.log('TRAIN IS OVER')
 
-    drawChart(dataLabels, dataForGraph)
 
     const symbolCollector = getSamples().map(s => {
         return toSymbol(s)
     })
 
-    for (let i = 0; i < 20; i++) {
-        const predProbVector = predict(tf.tensor(symbolCollector.slice(-3), [1, 3, 1]))
+    for (let i = 0; i < 30; i++) {
+        const predProbVector = predict(tf.tensor(symbolCollector.slice(-examinedNumberOfWord), [1, examinedNumberOfWord, 1]))
         symbolCollector.push(decode(predProbVector));
     }
 
@@ -176,12 +212,15 @@ const learnToGuessWord = async () => {
     console.log(generatedText)
 }
 
-learnToGuessWord();
+document.getElementById('start_training').addEventListener('click', learnToGuessWord)
+document.getElementById('stop_training').addEventListener('click', () => stop_training = true)
+
+// learnToGuessWord();
 
 
 const drawChart = (labelsGot, dataF) => {
     var ctx = document.getElementById("myChart");
-    new Chart(ctx, {
+    return new Chart(ctx, {
         type: 'line',
         data: {
             labels: labelsGot,
