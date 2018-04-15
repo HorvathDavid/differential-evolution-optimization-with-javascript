@@ -7,11 +7,11 @@ window.tf = tf
 const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
 // const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
 
-const numIterations = 50000
+const numIterations = 35000
 const learning_rate = 0.001
-const rnn_hidden = 128
+const rnn_hidden = 64
 const preparedDataforTestSet = inputText.split(' ')
-const examinedNumberOfWord = 5
+const examinedNumberOfWord = 6
 const endOfSeq = preparedDataforTestSet.length - (examinedNumberOfWord + 1)
 const optimizer = tf.train.rmsprop(learning_rate)
 let chart
@@ -75,9 +75,20 @@ const encode = (symbol) => {
 const decode = (probDistVector) => {
 
     // @todo: ide kell majd beleirni
-    const some = probDistVector.dataSync()
-    // console.log(some)
-    return some.indexOf(_.max(some))
+    const probs = probDistVector.softmax().dataSync()
+    const maxOfProbs = _.max(probs)
+    const probIndexes = [probs.indexOf(maxOfProbs)]
+
+    for (let prob of probs) {
+        if (prob > (maxOfProbs - 0.001)) {
+            probIndexes.push(probs.indexOf(prob))
+        }
+    }
+    
+    console.log('maxOfProbs',  maxOfProbs)
+    console.log('probIndexes',  probIndexes)
+
+    return probIndexes[_.random(0, probIndexes.length - 1)]
 }
 
 
@@ -90,7 +101,7 @@ const cells = [
 const rnn = tf.layers.rnn({ cell: cells, returnSequences: false });
 
 const rnn_out = rnn.apply(wordVector);
-const output = tf.layers.dense({ units: wordWrapLength, activation: 'softmax', useBias: true }).apply(rnn_out)
+const output = tf.layers.dense({ units: wordWrapLength, useBias: true }).apply(rnn_out)
 
 const model = tf.model({ inputs: wordVector, outputs: output })
 
@@ -158,9 +169,9 @@ const train = async (numIterations) => {
             lossCounter = lossValue.dataSync()[0]
         }
         lossCounter += lossValue.dataSync()[0]
-        
-        
-        if (iter % 100 === 0) {
+
+
+        if (iter % 100 === 0 && iter > 50) {
             const lvdsy = lossCounter / 100
             lossCounter = 0
             console.log(`
