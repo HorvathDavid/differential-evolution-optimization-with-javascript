@@ -1,272 +1,149 @@
 import _ from 'lodash'
-import * as tf from '@tensorflow/tfjs';
-import Chart from 'chart.js';
+// import * as tf from '@tensorflow/tfjs'
 
-window.tf = tf
+//  Test functions
+// https://en.wikipedia.org/wiki/Test_functions_for_optimization
 
-// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+// sphere func
+function func1(x) {
+    return x.reduce((prev, current) => {
+        return prev + Math.pow(current, 2);
+    }, 0)
+}
 
-const inputText = `Meghiszem azt! Hallgass csak ide. Amint jövök ki az erdőből, mit látok az út közepén? Belerekedt a sárba egy kis aranyos kocsi, a kocsi előtt négy szép fekete kutya befogva. A kocsiban olyan szép asszony ült, amilyet világéletemben nem láttam. Biztosan tündér lehetett. Mondja nekem: “Te jó ember, segíts ki a sárból, bizony nem bánod meg.” Gondoltam magamban, hogy bizony jólesnék, ha segítene a szegénységünkön, és segítettem, hogy a kutyák kihúzzák a sárból. Kérdi az asszony, hogy házas vagyok-e. Mondom neki, hogy igen. Kérdi, hogy gazdagok vagyunk-e. Mondom neki, hogy bizony szegények vagyunk, mint a templom egere. Azt mondja: “No, ezen segíthetünk. Mondd meg a feleségednek, hogy kívánjon három dolgot, teljesülni fog a kívánsága.” Azzal elment, mint a szél.`
+// Himmelblau's function
+function func2(x) {
+    const e = Math.pow(Math.pow(x[0], 2) + x[1]-11, 2) + Math.pow(x[0] + Math.pow(x[1], 2) -7, 2)
+    return e
+}
 
-// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
-
-const numIterations = 10000
-const learning_rate = 0.001
-const rnn_hidden = 256
-const preparedDataforTestSet = inputText.split(' ')
-const examinedNumberOfWord = 6
-const endOfSeq = preparedDataforTestSet.length - (examinedNumberOfWord + 1)
-const optimizer = tf.train.rmsprop(learning_rate)
-let chart
-let stop_training = false
+// func1(_.range(12)).then(a => console.log(a)).catch();
 
 
-// preparing data
-const createWordMap = (textData) => {
-    const wordArray = textData.split(' ')
-    const countedWordObject = wordArray.reduce((acc, cur, i) => {
-        // console.log(acc[cur])
-        if (acc[cur] === undefined) {
-            acc[cur] = 1
-        } else {
-            acc[cur] += 1
+function ensure_bounds(vec, bounds) {
+    const vec_new = []
+    for (let i of _.range(vec.length)) {
+        // console.log(vec)
+        // console.log(bounds)
+
+        if (vec[i] < bounds[i][0]) {
+            vec_new.push(bounds[i][0])
         }
-        return acc
-    }, {})
-
-    const arraOfshit = []
-    for (let key in countedWordObject) {
-        arraOfshit.push({ word: key, occurence: countedWordObject[key] })
-    }
-
-    const wordMap = _.sortBy(arraOfshit, 'occurence').reverse().map((e, i) => {
-        e['code'] = i
-        return e
-    })
-
-    return wordMap
-}
-
-const wordMap = createWordMap(inputText)
-const wordWrapLength = Object.keys(wordMap).length
-
-// console.log(wordMap)
-
-
-// return a word
-const fromSymbol = (symbol) => {
-    const object = wordMap.filter(e => e.code === symbol)[0]
-    return object.word
-}
-
-// return a symbol
-const toSymbol = (word) => {
-    const object = wordMap.filter(e => e.word === word)[0]
-    return object.code
-}
-
-// return onehot vector, for compare with probability distribution vector
-const encode = (symbol) => {
-    // console.log(symbol)
-    return tf.tidy(() => {
-        const symbolTensor1d = tf.tensor1d(symbol)
-        return tf.oneHot(symbolTensor1d, wordWrapLength)
-    })
-}
-
-// return a symbol
-const decode = (probDistVector) => {
-
-    // @todo: ide kell majd beleirni
-    const probs = probDistVector.softmax().dataSync()
-    const maxOfProbs = _.max(probs)
-    const probIndexes = []
-
-    for (let prob of probs) {
-        if (prob > (maxOfProbs - 0.3)) {
-            probIndexes.push(probs.indexOf(prob))
-        }
-    }
     
-    console.log('probIndexes',  probIndexes)
-
-    return probIndexes[_.random(0, probIndexes.length - 1)]
-}
-
-
-// building the model
-const wordVector = tf.input({ shape: [examinedNumberOfWord, 1] });
-const cells = [
-    tf.layers.lstmCell({ units: rnn_hidden }),
-    // tf.layers.lstmCell({ units: rnn_hidden }),
-];
-const rnn = tf.layers.rnn({ cell: cells, returnSequences: false });
-
-const rnn_out = rnn.apply(wordVector);
-const output = tf.layers.dense({ units: wordWrapLength, useBias: true }).apply(rnn_out)
-
-const model = tf.model({ inputs: wordVector, outputs: output })
-
-
-// sample is: shape: [batch, sequence, feature], here is [1, number of wordsq, 1]
-const predict = (samples) => {
-    // console.log(samples)
-    return model.predict(samples)
-}
-
-const loss = (labels, predictions) => {
-    // console.log(labels, predictions)
-    return tf.losses.softmaxCrossEntropy(labels, predictions).mean();
-}
-
-// performance could be improved if toSymbol the whole set
-// then random select from encodings not from string of arrays
-const getSamples = () => {
-    const startOfSeq = _.random(0, endOfSeq, false)
-    const retVal = preparedDataforTestSet.slice(startOfSeq, startOfSeq + (examinedNumberOfWord + 1))
-    return retVal
-}
-
-const train = async (numIterations) => {
-
-    let lossCounter = null
-
-    for (let iter = 0; iter < numIterations; iter++) {
-
-        let labelProbVector
-        let lossValue
-        let pred
-        let losse
-        let samplesTensor
-
-        const samples = getSamples().map(s => {
-            return toSymbol(s)
-        })
-
-        labelProbVector = encode(samples.splice(-1))
-
-        if (stop_training) {
-            stop_training = false
-            break
+        if (vec[i] > bounds[i][1]) {
+            vec_new.push(bounds[i][1])
         }
-
-        // optimizer.minimize is where the training happens. 
-
-        // The function it takes must return a numerical estimate (i.e. loss) 
-        // of how well we are doing using the current state of
-        // the variables we created at the start.
-
-        // This optimizer does the 'backward' step of our training process
-        // updating variables defined previously in order to minimize the
-        // loss.
-        lossValue = optimizer.minimize(() => {
-            // Feed the examples into the model
-            samplesTensor = tf.tensor(samples, [1, examinedNumberOfWord, 1])
-            pred = predict(samplesTensor);
-            losse = loss(labelProbVector, pred);
-            return losse
-        }, true);
-
-        if (lossCounter === null) {
-            lossCounter = lossValue.dataSync()[0]
+    
+        if (bounds[i][0] <= vec[i] <= bounds[i][1]) {
+            vec_new.push(vec[i])
         }
-        lossCounter += lossValue.dataSync()[0]
-
-
-        if (iter % 100 === 0 && iter > 50) {
-            const lvdsy = lossCounter / 100
-            lossCounter = 0
-            console.log(`
-            --------
-            Step number: ${iter}
-            The average loss is (last 100 steps):  ${lvdsy}
-            Number of tensors in memory: ${tf.memory().numTensors}
-            --------`)
-            // dataLabels.push(iter)
-            // dataForGraph.push(lvdsy)
-            chart.data.datasets[0].data.push(lvdsy)
-            chart.data.labels.push(iter)
-            chart.update()
-        }
-        // console.log(lossValue)
-        // Use tf.nextFrame to not block the browser.
-        await tf.nextFrame();
-        pred.dispose()
-        labelProbVector.dispose()
-        lossValue.dispose()
-        losse.dispose()
-        samplesTensor.dispose()
     }
+ 
+    return vec_new
 }
 
-const learnToGuessWord = async () => {
-    console.log('TRAIN START')
+function main(cost_func, bounds, popsize, mutate, recombination, maxiter) {
 
-    chart = drawChart([], [])
-
-    await train(numIterations);
-
-    console.log('TRAIN IS OVER')
-
-
-    const symbolCollector = getSamples().map(s => {
-        return toSymbol(s)
-    })
-
-    for (let i = 0; i < 30; i++) {
-        const predProbVector = predict(tf.tensor(symbolCollector.slice(-examinedNumberOfWord), [1, examinedNumberOfWord, 1]))
-        symbolCollector.push(decode(predProbVector));
+    //--- INITIALIZE A POPULATION (step #1) ----------------+
+    
+    const population = []
+    for (let i in _.range(popsize)) {
+        let indv = []
+        for (let j in _.range(bounds.length)) {
+            // indv.push(_.random(bounds[j][0],bounds[j][1]))
+            // indv.push(_.random(bounds[j][0],bounds[j][1], true))
+            indv.push(bounds[j][0] + Math.random()*(bounds[j][1] - bounds[j][0]))
+        }
+        population.push(indv)
     }
 
-    const generatedText = symbolCollector.map(s => {
-        return fromSymbol(s)
-    }).join(' ')
-
-    console.log(generatedText)
-}
-
-document.getElementById('start_training').addEventListener('click', learnToGuessWord)
-document.getElementById('stop_training').addEventListener('click', () => stop_training = true)
-
-// learnToGuessWord();
-
-
-const drawChart = (labelsGot, dataF) => {
-    var ctx = document.getElementById("myChart");
-    return new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labelsGot,
-            datasets: [{
-                label: 'LOSS',
-                data: dataF,
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.2)',
-                    'rgba(54, 162, 235, 0.2)',
-                    'rgba(255, 206, 86, 0.2)',
-                    'rgba(75, 192, 192, 0.2)',
-                    'rgba(153, 102, 255, 0.2)',
-                    'rgba(255, 159, 64, 0.2)'
-                ],
-                borderColor: [
-                    'rgba(255,99,132,1)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 206, 86, 1)',
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(153, 102, 255, 1)',
-                    'rgba(255, 159, 64, 1)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            scales: {
-                yAxes: [{
-                    ticks: {
-                        beginAtZero: true
-                    }
-                }]
+    console.log('first pop', population)
+            
+    //--- SOLVE --------------------------------------------+
+    
+    // cycle through each generation (step #2)
+    for (let i in _.range(maxiter+1)) {
+        console.log('GENERATION:', i)
+    
+        var gen_scores = [] // score keeping
+    
+        // cycle through each individual in the population
+        for (let j in _.range(popsize)) {
+            //--- MUTATION (step #3.A) ---------------------+
+            
+            // select three random vector index positions [0, popsize), not including current vector (j)
+            let canidates = _.range(popsize)
+            canidates.splice(j, 1)
+            let random_index = _.sampleSize(canidates, 3)
+    
+            let x_1 = population[random_index[0]]
+            let x_2 = population[random_index[1]]
+            let x_3 = population[random_index[2]]
+            let x_t = population[j]     // target individual
+    
+            // subtract x3 from x2, and create a new vector (x_diff)
+            let x_diff = _.zip(x_3, x_2).map(e => e[0] - e[1])
+    
+            // multiply x_diff by the mutation factor (F) and add to x_1
+            let v_donor = _.zip(x_1, x_diff).map(e => e[0] + mutate * e[1])
+            v_donor = ensure_bounds(v_donor, bounds)
+    
+            //--- RECOMBINATION (step #3.B) ----------------+
+    
+            let v_trial = []
+            for (let k in _.range(x_t.length)) {
+                let crossover = Math.random()
+                if (crossover <= recombination) {
+                    v_trial.push(v_donor[k])
+                    
+                } else {
+                    v_trial.push(x_t[k])
+                }
+            }
+                    
+            //--- GREEDY SELECTION (step #3.C) -------------+
+    
+            let score_trial  = cost_func(v_trial)
+            let score_target = cost_func(x_t)
+    
+            if (score_trial < score_target) {
+                population[j] = v_trial
+                gen_scores.push(score_trial)
+                console.log('   >',score_trial, v_trial)
+            } else {
+                console.log( '   >',score_target, x_t)
+                gen_scores.push(score_target)
             }
         }
-    });
+    
+    
+    }
+    //--- SCORE KEEPING --------------------------------+
+
+    let gen_avg = _.sum(gen_scores) / popsize                         // current generation avg. fitness
+    let gen_best = _.min(gen_scores)                                  // fitness of best individual
+    let gen_sol = population[gen_scores.indexOf(gen_best)]     // solution of best individual
+
+    console.log( ' > GENERATION AVERAGE:',gen_avg)
+    console.log( ' > GENERATION BEST:',gen_best)
+    console.log( ' > BEST SOLUTION:',gen_sol)
+    
+    return gen_sol
 }
+
+
+//--- CONSTANTS ----------------------------------------------------------------+
+
+const cost_func = func2                   // Cost function
+const bounds = [[-5,5],[-5,5]]            // Bounds [(x1_min, x1_max), (x2_min, x2_max),...]
+const popsize = 20                        // Population size, must be >= 4
+const mutate = 0.5                        // Mutation factor [0,2]
+const recombination = 0.7                 // Recombination rate [0,1]
+const maxiter = 40                        // Max number of generations (maxiter)
+
+//--- RUN ----------------------------------------------------------------------+
+
+main(cost_func, bounds, popsize, mutate, recombination, maxiter)
+
+//--- END ----------------------------------------------------------------------+
+

@@ -5,7 +5,6 @@
   "main": "index.js",
   "dependencies": {
     "@tensorflow/tfjs": "^0.6.1",
-    "chart.js": "^2.7.2",
     "lodash": "^4.17.5"
   },
   "scripts": {
