@@ -4,12 +4,15 @@ import Chart from 'chart.js';
 
 window.tf = tf
 
-const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+// const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat . some said this , and some said that but at last a young mouse got up and said he had a proposal to make , which he thought would meet the case . you will all agree , said he , that our chief danger consists in the sly and treacherous manner in which the enemy approaches us . now , if we could receive some signal of her approach , we could easily escape from her . i venture , therefore , to propose that a small bell be procured , and attached by a ribbon round the neck of the cat . by this means we should always know when she was about , and could easily retire while she was in the neighbourhood . this proposal met with general applause , until an old mouse got up and said that is all very well , but who is to bell the cat ? the mice looked at one another and nobody spoke . then the old mouse said it is easy to propose impossible remedies .`
+
+const inputText = `Meghiszem azt! Hallgass csak ide. Amint jövök ki az erdőből, mit látok az út közepén? Belerekedt a sárba egy kis aranyos kocsi, a kocsi előtt négy szép fekete kutya befogva. A kocsiban olyan szép asszony ült, amilyet világéletemben nem láttam. Biztosan tündér lehetett. Mondja nekem: “Te jó ember, segíts ki a sárból, bizony nem bánod meg.” Gondoltam magamban, hogy bizony jólesnék, ha segítene a szegénységünkön, és segítettem, hogy a kutyák kihúzzák a sárból. Kérdi az asszony, hogy házas vagyok-e. Mondom neki, hogy igen. Kérdi, hogy gazdagok vagyunk-e. Mondom neki, hogy bizony szegények vagyunk, mint a templom egere. Azt mondja: “No, ezen segíthetünk. Mondd meg a feleségednek, hogy kívánjon három dolgot, teljesülni fog a kívánsága.” Azzal elment, mint a szél.`
+
 // const inputText = `long ago , the mice had a general council to consider what measures they could take to outwit their common enemy , the cat .`
 
-const numIterations = 35000
+const numIterations = 10000
 const learning_rate = 0.001
-const rnn_hidden = 64
+const rnn_hidden = 256
 const preparedDataforTestSet = inputText.split(' ')
 const examinedNumberOfWord = 6
 const endOfSeq = preparedDataforTestSet.length - (examinedNumberOfWord + 1)
@@ -77,15 +80,14 @@ const decode = (probDistVector) => {
     // @todo: ide kell majd beleirni
     const probs = probDistVector.softmax().dataSync()
     const maxOfProbs = _.max(probs)
-    const probIndexes = [probs.indexOf(maxOfProbs)]
+    const probIndexes = []
 
     for (let prob of probs) {
-        if (prob > (maxOfProbs - 0.001)) {
+        if (prob > (maxOfProbs - 0.3)) {
             probIndexes.push(probs.indexOf(prob))
         }
     }
     
-    console.log('maxOfProbs',  maxOfProbs)
     console.log('probIndexes',  probIndexes)
 
     return probIndexes[_.random(0, probIndexes.length - 1)]
@@ -96,7 +98,7 @@ const decode = (probDistVector) => {
 const wordVector = tf.input({ shape: [examinedNumberOfWord, 1] });
 const cells = [
     tf.layers.lstmCell({ units: rnn_hidden }),
-    tf.layers.lstmCell({ units: rnn_hidden }),
+    // tf.layers.lstmCell({ units: rnn_hidden }),
 ];
 const rnn = tf.layers.rnn({ cell: cells, returnSequences: false });
 
